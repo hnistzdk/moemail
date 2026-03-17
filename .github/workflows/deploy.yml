@@ -44,6 +44,7 @@ jobs:
           DATABASE_ID: ${{ secrets.DATABASE_ID }}
           KV_NAMESPACE_NAME: ${{ secrets.KV_NAMESPACE_NAME }}
           KV_NAMESPACE_ID: ${{ secrets.KV_NAMESPACE_ID }}
+          R2_ATTACHMENTS_BUCKET: ${{ secrets.R2_ATTACHMENTS_BUCKET }}
           CUSTOM_DOMAIN: ${{ secrets.CUSTOM_DOMAIN }}
           AUTH_GITHUB_ID: ${{ secrets.AUTH_GITHUB_ID }}
           AUTH_GITHUB_SECRET: ${{ secrets.AUTH_GITHUB_SECRET }}

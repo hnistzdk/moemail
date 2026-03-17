@@ -1,8 +1,10 @@
+import { getRequestContext } from "@cloudflare/next-on-pages"
 import { NextResponse } from "next/server"
 import { createDb } from "@/lib/db"
-import { messages, emails } from "@/lib/schema"
+import { attachments, messages, emails } from "@/lib/schema"
 import { and, eq } from "drizzle-orm"
 import { getUserId } from "@/lib/apiKey"
+import { buildAttachmentDownloadUrl } from "@/lib/attachments"
 export const runtime = "edge"
 
 export async function DELETE(
@@ -40,6 +42,21 @@ export async function DELETE(
           { error: "Message not found or already deleted" },
           { status: 404 }
       )
+    }
+
+    const messageAttachments = await db.query.attachments.findMany({
+      where: and(
+        eq(attachments.messageId, messageId),
+        eq(attachments.emailId, id)
+      )
+    })
+
+    for (const attachment of messageAttachments) {
+      try {
+        await getRequestContext().env.ATTACHMENTS.delete(attachment.r2Key)
+      } catch (error) {
+        console.error('Failed to delete attachment object:', attachment.r2Key, error)
+      }
     }
 
     await db.delete(messages)
@@ -81,6 +98,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         eq(messages.emailId, id)
       )
     })
+
+    const messageAttachments = await db.query.attachments.findMany({
+      where: and(
+        eq(attachments.messageId, messageId),
+        eq(attachments.emailId, id)
+      )
+    })
     
     if (!message) {
       return NextResponse.json(
@@ -99,7 +123,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         html: message.html,
         received_at: message.receivedAt.getTime(),
         sent_at: message.receivedAt.getTime(),
-        type: message.type as 'received' | 'sent'
+        type: message.type as 'received' | 'sent',
+        attachments: messageAttachments.map(attachment => ({
+          id: attachment.id,
+          filename: attachment.filename,
+          content_type: attachment.contentType,
+          size: attachment.size,
+          inline: attachment.disposition === 'inline',
+          download_url: buildAttachmentDownloadUrl(id, messageId, attachment.id),
+        }))
       }
     })
   } catch (error) {

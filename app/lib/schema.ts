@@ -75,6 +75,30 @@ export const messages = sqliteTable("message", {
   emailIdReceivedAtTypeIdx: index("message_email_id_received_at_type_idx").on(table.emailId, table.receivedAt, table.type),
 }))
 
+export const attachments = sqliteTable("attachment", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  messageId: text("message_id")
+    .notNull()
+    .references(() => messages.id, { onDelete: "cascade" }),
+  emailId: text("email_id")
+    .notNull()
+    .references(() => emails.id, { onDelete: "cascade" }),
+  filename: text("filename"),
+  contentType: text("content_type").notNull(),
+  size: integer("size").notNull(),
+  r2Key: text("r2_key").notNull().unique(),
+  contentId: text("content_id"),
+  disposition: text("disposition"),
+  sha256: text("sha256"),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+}, (table) => ({
+  messageIdIdx: index("attachment_message_id_idx").on(table.messageId),
+  emailIdIdx: index("attachment_email_id_idx").on(table.emailId),
+  createdAtIdx: index("attachment_created_at_idx").on(table.createdAt),
+}))
+
 export const webhooks = sqliteTable('webhook', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id')
@@ -192,5 +216,16 @@ export const messageSharesRelations = relations(messageShares, ({ one }) => ({
   message: one(messages, {
     fields: [messageShares.messageId],
     references: [messages.id],
+  }),
+}));
+
+export const attachmentsRelations = relations(attachments, ({ one }) => ({
+  message: one(messages, {
+    fields: [attachments.messageId],
+    references: [messages.id],
+  }),
+  email: one(emails, {
+    fields: [attachments.emailId],
+    references: [emails.id],
   }),
 }));

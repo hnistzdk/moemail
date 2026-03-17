@@ -7,6 +7,7 @@ const CUSTOM_DOMAIN = process.env.CUSTOM_DOMAIN;
 const PROJECT_NAME = process.env.PROJECT_NAME || "moemail";
 const DATABASE_NAME = process.env.DATABASE_NAME || "moemail-db";
 const KV_NAMESPACE_NAME = process.env.KV_NAMESPACE_NAME || "moemail-kv";
+const R2_ATTACHMENTS_BUCKET = process.env.R2_ATTACHMENTS_BUCKET || `${PROJECT_NAME}-attachments`;
 const DATABASE_ID = process.env.DATABASE_ID;
 
 const client = new Cloudflare({
@@ -96,4 +97,25 @@ export const createKVNamespace = async () => {
   console.log("✅ KV namespace created successfully");
 
   return kvNamespace;
+};
+
+export const getR2Buckets = async () => {
+  const response = await client.r2.buckets.list({
+    account_id: CF_ACCOUNT_ID,
+  });
+
+  return response.buckets ?? [];
+};
+
+export const createR2Bucket = async () => {
+  console.log(`🆕 Creating new R2 bucket: "${R2_ATTACHMENTS_BUCKET}"`);
+
+  const bucket = await client.r2.buckets.create({
+    account_id: CF_ACCOUNT_ID,
+    name: R2_ATTACHMENTS_BUCKET,
+  });
+
+  console.log("✅ R2 bucket created successfully");
+
+  return bucket;
 };

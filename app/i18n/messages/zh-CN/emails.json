@@ -84,6 +84,8 @@
     "from": "发件人",
     "to": "收件人",
     "time": "时间",
+    "attachments": "附件（{count}）",
+    "unnamedAttachment": "未命名附件",
     "htmlFormat": "HTML 格式",
     "textFormat": "纯文本格式"
   },

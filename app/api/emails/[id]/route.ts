@@ -1,6 +1,7 @@
+import { getRequestContext } from "@cloudflare/next-on-pages"
 import { NextResponse } from "next/server"
 import { createDb } from "@/lib/db"
-import { emails, messages } from "@/lib/schema"
+import { attachments, emails, messages } from "@/lib/schema"
 import { eq, and, lt, or, sql, ne, isNull } from "drizzle-orm"
 import { encodeCursor, decodeCursor } from "@/lib/cursor"
 import { getUserId } from "@/lib/apiKey"
@@ -9,7 +10,7 @@ import { checkBasicSendPermission } from "@/lib/send-permissions"
 export const runtime = "edge"
 
 export async function DELETE(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const userId = await getUserId()
@@ -26,10 +27,23 @@ export async function DELETE(
 
     if (!email) {
       return NextResponse.json(
-        { error: "邮箱不存在或无权限删除" },
+        { error: "Email not found or no permission to delete" },
         { status: 403 }
       )
     }
+
+    const emailAttachments = await db.query.attachments.findMany({
+      where: eq(attachments.emailId, id)
+    })
+
+    for (const attachment of emailAttachments) {
+      try {
+        await getRequestContext().env.ATTACHMENTS.delete(attachment.r2Key)
+      } catch (error) {
+        console.error('Failed to delete attachment object:', attachment.r2Key, error)
+      }
+    }
+
     await db.delete(messages)
       .where(eq(messages.emailId, id))
 
@@ -40,11 +54,11 @@ export async function DELETE(
   } catch (error) {
     console.error('Failed to delete email:', error)
     return NextResponse.json(
-      { error: "删除邮箱失败" },
+      { error: "Failed to delete email" },
       { status: 500 }
     )
   }
-} 
+}
 
 const PAGE_SIZE = 20
 
@@ -65,7 +79,7 @@ export async function GET(
       const permissionResult = await checkBasicSendPermission(userId!)
       if (!permissionResult.canSend) {
         return NextResponse.json(
-          { error: permissionResult.error || "您没有查看发送邮件的权限" },
+          { error: permissionResult.error || "No permission to view sent messages" },
           { status: 403 }
         )
       }
@@ -80,17 +94,17 @@ export async function GET(
 
     if (!email) {
       return NextResponse.json(
-        { error: "无权限查看" },
+        { error: "Email not found or no permission to view" },
         { status: 403 }
       )
     }
 
     const baseConditions = and(
       eq(messages.emailId, id),
-      messageType === 'sent' 
-        ? eq(messages.type, "sent") 
+      messageType === 'sent'
+        ? eq(messages.type, 'sent')
         : or(
-            ne(messages.type, "sent"),
+            ne(messages.type, 'sent'),
             isNull(messages.type)
           )
     )
@@ -103,21 +117,21 @@ export async function GET(
     const conditions = [baseConditions]
 
     if (cursorStr) {
-      const { timestamp, id } = decodeCursor(cursorStr)
+      const { timestamp, id: cursorId } = decodeCursor(cursorStr)
       const orderByTime = messageType === 'sent' ? messages.sentAt : messages.receivedAt
       conditions.push(
         or(
           lt(orderByTime, new Date(timestamp)),
           and(
             eq(orderByTime, new Date(timestamp)),
-            lt(messages.id, id)
+            lt(messages.id, cursorId)
           )
         )
       )
     }
 
     const orderByTime = messageType === 'sent' ? messages.sentAt : messages.receivedAt
-    
+
     const results = await db.query.messages.findMany({
       where: and(...conditions),
       orderBy: (messages, { desc }) => [
@@ -126,11 +140,11 @@ export async function GET(
       ],
       limit: PAGE_SIZE + 1
     })
-    
+
     const hasMore = results.length > PAGE_SIZE
-    const nextCursor = hasMore 
+    const nextCursor = hasMore
       ? encodeCursor(
-          messageType === 'sent' 
+          messageType === 'sent'
             ? results[PAGE_SIZE - 1].sentAt!.getTime()
             : results[PAGE_SIZE - 1].receivedAt.getTime(),
           results[PAGE_SIZE - 1].id
@@ -138,11 +152,11 @@ export async function GET(
       : null
     const messageList = hasMore ? results.slice(0, PAGE_SIZE) : results
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       messages: messageList.map(msg => ({
         id: msg.id,
-        from_address: msg?.fromAddress,
-        to_address: msg?.toAddress,
+        from_address: msg.fromAddress,
+        to_address: msg.toAddress,
         subject: msg.subject,
         content: msg.content,
         html: msg.html,
@@ -155,8 +169,8 @@ export async function GET(
   } catch (error) {
     console.error('Failed to fetch messages:', error)
     return NextResponse.json(
-      { error: "Failed to fetch messages" },
+      { error: 'Failed to fetch messages' },
       { status: 500 }
     )
   }
-} 
+}

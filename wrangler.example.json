@@ -17,5 +17,11 @@
       "binding": "SITE_CONFIG",
       "id": "${KV_NAMESPACE_ID}"
     }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ATTACHMENTS",
+      "bucket_name": "${R2_ATTACHMENTS_BUCKET}"
+    }
   ]
 }

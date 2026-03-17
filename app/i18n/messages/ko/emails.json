@@ -85,7 +85,9 @@
     "to": "받는 사람",
     "time": "시간",
     "htmlFormat": "HTML 형식",
-    "textFormat": "일반 텍스트 형식"
+    "textFormat": "일반 텍스트 형식",
+    "attachments": "???? ({count})",
+    "unnamedAttachment": "?? ?? ????"
   },
   "share": {
     "title": "메일함 공유",

@@ -85,7 +85,9 @@
     "to": "收件者",
     "time": "時間",
     "htmlFormat": "HTML 格式",
-    "textFormat": "純文字格式"
+    "textFormat": "純文字格式",
+    "attachments": "???{count}?",
+    "unnamedAttachment": "?????"
   },
   "share": {
     "title": "分享郵箱",

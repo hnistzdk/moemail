@@ -7,14 +7,17 @@ import {
   createDatabase,
   createKVNamespace,
   createPages,
+  createR2Bucket,
   getDatabase,
   getKVNamespaceList,
   getPages,
+  getR2Buckets,
 } from "./cloudflare";
 
 const PROJECT_NAME = process.env.PROJECT_NAME || "moemail";
 const DATABASE_NAME = process.env.DATABASE_NAME || "moemail-db";
 const KV_NAMESPACE_NAME = process.env.KV_NAMESPACE_NAME || "moemail-kv";
+const R2_ATTACHMENTS_BUCKET = process.env.R2_ATTACHMENTS_BUCKET || `${PROJECT_NAME}-attachments`;
 const CUSTOM_DOMAIN = process.env.CUSTOM_DOMAIN;
 const KV_NAMESPACE_ID = process.env.KV_NAMESPACE_ID;
 
@@ -73,6 +76,10 @@ const setupConfigFile = (examplePath: string, targetPath: string) => {
     // 处理数据库配置
     if (json.d1_databases && json.d1_databases.length > 0) {
       json.d1_databases[0].database_name = DATABASE_NAME;
+    }
+
+    if (json.r2_buckets && json.r2_buckets.length > 0) {
+      json.r2_buckets[0].bucket_name = R2_ATTACHMENTS_BUCKET;
     }
 
     // 写入配置文件
@@ -157,6 +164,31 @@ const updateKVConfig = (namespaceId: string) => {
   }
 };
 
+const updateR2Config = (bucketName: string) => {
+  console.log(`📝 Updating R2 bucket name (${bucketName}) in configurations...`);
+
+  const configFiles = [
+    "wrangler.json",
+    "wrangler.email.json",
+  ];
+
+  for (const filename of configFiles) {
+    const configPath = resolve(filename);
+    if (!existsSync(configPath)) continue;
+
+    try {
+      const json = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (json.r2_buckets && json.r2_buckets.length > 0) {
+        json.r2_buckets[0].bucket_name = bucketName;
+      }
+      writeFileSync(configPath, JSON.stringify(json, null, 2));
+      console.log(`✅ Updated R2 bucket name in ${filename}`);
+    } catch (error) {
+      console.error(`❌ Failed to update ${filename}:`, error);
+    }
+  }
+};
+
 /**
  * 检查并创建数据库
  */
@@ -201,10 +233,33 @@ const checkAndCreateDatabase = async () => {
 const migrateDatabase = () => {
   console.log("📝 Migrating remote database...");
   try {
-    execSync("pnpm run db:migrate-remote", { stdio: "inherit" });
+    execSync(`pnpm dlx wrangler d1 migrations apply ${DATABASE_NAME} --remote --config wrangler.json`, { stdio: "inherit" });
     console.log("✅ Database migration completed successfully");
   } catch (error) {
     console.error("❌ Database migration failed:", error);
+    throw error;
+  }
+};
+
+const checkAndCreateR2Bucket = async () => {
+  console.log(`🔍 Checking if R2 bucket "${R2_ATTACHMENTS_BUCKET}" exists...`);
+
+  try {
+    const buckets = await getR2Buckets();
+    const existingBucket = buckets.find(bucket => bucket.name === R2_ATTACHMENTS_BUCKET);
+
+    if (existingBucket?.name) {
+      updateR2Config(existingBucket.name);
+      console.log(`✅ R2 bucket "${R2_ATTACHMENTS_BUCKET}" already exists`);
+      return;
+    }
+
+    console.log(`⚠️ R2 bucket not found, creating new bucket...`);
+    const bucket = await createR2Bucket();
+    updateR2Config(bucket.name || R2_ATTACHMENTS_BUCKET);
+    console.log(`✅ R2 bucket "${bucket.name}" created successfully`);
+  } catch (error) {
+    console.error(`❌ Failed to check or create R2 bucket:`, error);
     throw error;
   }
 };
@@ -480,6 +535,7 @@ const main = async () => {
     setupEnvFile();
     setupWranglerConfigs();
     await checkAndCreateDatabase();
+    await checkAndCreateR2Bucket();
     migrateDatabase();
     await checkAndCreateKVNamespace();
     await checkAndCreatePages();

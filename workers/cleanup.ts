@@ -1,5 +1,6 @@
 interface Env {
   DB: D1Database
+  ATTACHMENTS: R2Bucket
 }
 
 const CLEANUP_CONFIG = {
@@ -20,13 +21,48 @@ const main = {
         return
       }
 
-      const result = await env.DB
+      const expiredEmails = await env.DB
         .prepare(`
-          DELETE FROM email 
+          SELECT id
+          FROM email
           WHERE expires_at < ?
           LIMIT ?
         `)
         .bind(now, CLEANUP_CONFIG.BATCH_SIZE)
+        .all<{ id: string }>()
+
+      const emailIds = (expiredEmails.results || []).map(item => item.id)
+
+      if (emailIds.length === 0) {
+        console.log('No expired emails found')
+        return
+      }
+
+      const placeholders = emailIds.map(() => '?').join(',')
+
+      const attachmentRows = await env.DB
+        .prepare(`
+          SELECT r2_key
+          FROM attachment
+          WHERE email_id IN (${placeholders})
+        `)
+        .bind(...emailIds)
+        .all<{ r2_key: string }>()
+
+      for (const row of attachmentRows.results || []) {
+        try {
+          await env.ATTACHMENTS.delete(row.r2_key)
+        } catch (error) {
+          console.error('Failed to delete attachment object:', row.r2_key, error)
+        }
+      }
+
+      const result = await env.DB
+        .prepare(`
+          DELETE FROM email 
+          WHERE id IN (${placeholders})
+        `)
+        .bind(...emailIds)
         .run()
 
       if (result.success) {

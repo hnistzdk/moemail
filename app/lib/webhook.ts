@@ -9,6 +9,15 @@ export interface EmailMessage {
   html: string
   receivedAt: string
   toAddress: string
+  attachments?: {
+    id: string
+    filename: string | null
+    contentType: string
+    size: number
+    inline: boolean
+    contentId: string | null
+    downloadUrl: string
+  }[]
 }
 
 export interface WebhookPayload {

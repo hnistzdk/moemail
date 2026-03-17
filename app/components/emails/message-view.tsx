@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useTranslations } from "next-intl"
-import { Loader2, Share2 } from "lucide-react"
+import { Download, Loader2, Paperclip, Share2 } from "lucide-react"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { useTheme } from "next-themes"
@@ -18,6 +18,14 @@ interface Message {
   html?: string
   received_at?: number
   sent_at?: number
+  attachments?: {
+    id: string
+    filename?: string | null
+    content_type: string
+    size: number
+    inline: boolean
+    download_url: string
+  }[]
 }
 
 interface MessageViewProps {
@@ -207,6 +215,12 @@ export function MessageView({ emailId, messageId, messageType = 'received' }: Me
 
   if (!message) return null
 
+  const formatFileSize = (size: number) => {
+    if (size < 1024) return `${size} B`
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+    return `${(size / 1024 / 1024).toFixed(1)} MB`
+  }
+
   return (
     <div className="h-full flex flex-col">
       <div className="p-4 space-y-3 border-b border-primary/20">
@@ -232,6 +246,35 @@ export function MessageView({ emailId, messageId, messageType = 'received' }: Me
           )}
           <p>{t("time")}: {new Date(message.sent_at || message.received_at || 0).toLocaleString()}</p>
         </div>
+        {message.attachments && message.attachments.length > 0 && (
+          <div className="pt-2 border-t border-primary/10 space-y-2">
+            <div className="text-xs font-medium text-gray-600 flex items-center gap-1">
+              <Paperclip className="h-3.5 w-3.5" />
+              {t("attachments", { count: message.attachments.length })}
+            </div>
+            <div className="space-y-1">
+              {message.attachments.map(attachment => (
+                <a
+                  key={attachment.id}
+                  href={attachment.download_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-between rounded-md border border-primary/10 px-2 py-2 text-xs hover:bg-primary/5"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">
+                      {attachment.filename || t("unnamedAttachment")}
+                    </div>
+                    <div className="text-gray-500 truncate">
+                      {attachment.content_type} · {formatFileSize(attachment.size)}
+                    </div>
+                  </div>
+                  <Download className="h-3.5 w-3.5 shrink-0" />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       
       {message.html && message.content && (

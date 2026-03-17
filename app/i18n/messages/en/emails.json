@@ -84,6 +84,8 @@
     "from": "From",
     "to": "To",
     "time": "Time",
+    "attachments": "Attachments ({count})",
+    "unnamedAttachment": "Unnamed attachment",
     "htmlFormat": "HTML Format",
     "textFormat": "Plain Text Format"
   },

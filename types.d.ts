@@ -5,6 +5,7 @@ declare global {
   interface CloudflareEnv {
     DB: D1Database;
     SITE_CONFIG: KVNamespace;
+    ATTACHMENTS: R2Bucket;
   }
 
   interface Window {

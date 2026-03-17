@@ -85,7 +85,9 @@
     "to": "宛先",
     "time": "時間",
     "htmlFormat": "HTML 表示",
-    "textFormat": "テキスト表示"
+    "textFormat": "テキスト表示",
+    "attachments": "???????{count}?",
+    "unnamedAttachment": "????????????"
   },
   "share": {
     "title": "メールボックスを共有",
