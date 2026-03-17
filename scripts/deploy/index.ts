@@ -330,12 +330,24 @@ const checkAndCreatePages = async () => {
  * 推送Pages密钥
  */
 const readEnvSecrets = (allowedKeys: string[]) => {
+  const secrets: Record<string, string> = {};
+
+  for (const key of allowedKeys) {
+    const value = process.env[key]?.trim();
+    if (value) {
+      secrets[key] = value;
+    }
+  }
+
+  if (Object.keys(secrets).length > 0) {
+    return secrets;
+  }
+
   if (!existsSync(resolve('.env'))) {
     setupEnvFile();
   }
 
   const envContent = readFileSync(resolve('.env'), 'utf-8');
-  const secrets: Record<string, string> = {};
 
   envContent.split('\n').forEach(line => {
     const trimmedLine = line.trim();
