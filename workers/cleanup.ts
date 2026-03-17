@@ -1,6 +1,6 @@
 interface Env {
   DB: D1Database
-  ATTACHMENTS: R2Bucket
+  ATTACHMENTS?: R2Bucket
 }
 
 const CLEANUP_CONFIG = {
@@ -11,11 +11,21 @@ const CLEANUP_CONFIG = {
   BATCH_SIZE: 100,
 } as const 
 
+const ensureAttachmentsBucket = (env: Env): R2Bucket => {
+  if (!env.ATTACHMENTS) {
+    throw new Error('ATTACHMENTS R2 binding is required for cleanup worker')
+  }
+
+  return env.ATTACHMENTS
+}
+
 const main = {
   async scheduled(_: ScheduledEvent, env: Env) {
     const now = Date.now()
 
     try {
+      const attachmentsBucket = ensureAttachmentsBucket(env)
+
       if (!CLEANUP_CONFIG.DELETE_EXPIRED_EMAILS) {
         console.log('Expired email deletion is disabled')
         return
@@ -50,11 +60,7 @@ const main = {
         .all<{ r2_key: string }>()
 
       for (const row of attachmentRows.results || []) {
-        try {
-          await env.ATTACHMENTS.delete(row.r2_key)
-        } catch (error) {
-          console.error('Failed to delete attachment object:', row.r2_key, error)
-        }
+        await attachmentsBucket.delete(row.r2_key)
       }
 
       const result = await env.DB

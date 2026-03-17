@@ -170,6 +170,7 @@ const updateR2Config = (bucketName: string) => {
   const configFiles = [
     "wrangler.json",
     "wrangler.email.json",
+    "wrangler.cleanup.json",
   ];
 
   for (const filename of configFiles) {
@@ -186,6 +187,24 @@ const updateR2Config = (bucketName: string) => {
     } catch (error) {
       console.error(`❌ Failed to update ${filename}:`, error);
     }
+  }
+};
+
+const ensureCleanupWorkerR2Binding = () => {
+  const configPath = resolve("wrangler.cleanup.json");
+
+  if (!existsSync(configPath)) {
+    throw new Error("wrangler.cleanup.json not found");
+  }
+
+  const json = JSON.parse(readFileSync(configPath, "utf-8"));
+  const bindings = Array.isArray(json.r2_buckets) ? json.r2_buckets : [];
+  const attachmentBinding = bindings.find(
+    (binding: { binding?: string; bucket_name?: string }) => binding.binding === "ATTACHMENTS"
+  );
+
+  if (!attachmentBinding?.bucket_name) {
+    throw new Error("Cleanup worker requires ATTACHMENTS R2 binding in wrangler.cleanup.json");
   }
 };
 
@@ -483,6 +502,7 @@ const deployEmailWorker = () => {
 const deployCleanupWorker = () => {
   console.log("🚧 Deploying Cleanup Worker...");
   try {
+    ensureCleanupWorkerR2Binding();
     execSync("pnpm dlx wrangler deploy --config wrangler.cleanup.json", { stdio: "inherit" });
     console.log("✅ Cleanup Worker deployed successfully");
   } catch (error) {
