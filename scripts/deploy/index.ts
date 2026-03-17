@@ -329,94 +329,94 @@ const checkAndCreatePages = async () => {
 /**
  * 推送Pages密钥
  */
-const pushPagesSecret = () => {
-  console.log("🔐 Pushing environment secrets to Pages...");
+const readEnvSecrets = (allowedKeys: string[]) => {
+  if (!existsSync(resolve('.env'))) {
+    setupEnvFile();
+  }
 
-  // 定义运行时所需的环境变量列表
-  const runtimeEnvVars = [
-    'AUTH_GITHUB_ID', 
-    'AUTH_GITHUB_SECRET', 
-    'AUTH_GOOGLE_ID', 
-    'AUTH_GOOGLE_SECRET', 
-    'AUTH_SECRET'
-  ];
+  const envContent = readFileSync(resolve('.env'), 'utf-8');
+  const secrets: Record<string, string> = {};
 
-  try {
-    // 确保.env文件存在
-    if (!existsSync(resolve('.env'))) {
-      setupEnvFile();
-    }
+  envContent.split('\n').forEach(line => {
+    const trimmedLine = line.trim();
 
-    // 读取.env文件内容
-    const envContent = readFileSync(resolve('.env'), 'utf-8');
-    
-    // 解析环境变量为对象
-    const secrets: Record<string, string> = {};
-    
-    envContent.split('\n').forEach(line => {
-      const trimmedLine = line.trim();
-      
-      // 跳过注释和空行
-      if (!trimmedLine || trimmedLine.startsWith('#')) {
-        return;
-      }
-      
-      // 解析键值对
-      const equalIndex = trimmedLine.indexOf('=');
-      if (equalIndex === -1) {
-        return;
-      }
-      
-      const key = trimmedLine.substring(0, equalIndex).trim();
-      let value = trimmedLine.substring(equalIndex + 1).trim();
-      
-      // 移除引号
-      value = value.replace(/^["']|["']$/g, '');
-      
-      // 只保留运行时所需的环境变量，且值不为空
-      if (runtimeEnvVars.includes(key) && value.length > 0) {
-        secrets[key] = value;
-      }
-    });
-
-    // 检查是否有需要推送的secrets
-    if (Object.keys(secrets).length === 0) {
-      console.log("⚠️ No runtime secrets found to push");
+    if (!trimmedLine || trimmedLine.startsWith('#')) {
       return;
     }
 
-    // 创建JSON格式的临时文件
-    const runtimeEnvFile = resolve('.env.runtime.json');
-    writeFileSync(runtimeEnvFile, JSON.stringify(secrets, null, 2));
-
-    console.log(`📝 Found ${Object.keys(secrets).length} secrets to push:`, Object.keys(secrets).join(', '));
-
-    // 使用临时文件推送secrets
-    execSync(`pnpm dlx wrangler pages secret bulk ${runtimeEnvFile}`, { 
-      stdio: "inherit" 
-    });
-
-    // 清理临时文件
-    if (existsSync(runtimeEnvFile)) {
-      execSync(`rm ${runtimeEnvFile}`, { stdio: "inherit" });
+    const equalIndex = trimmedLine.indexOf('=');
+    if (equalIndex === -1) {
+      return;
     }
 
-    console.log("✅ Secrets pushed successfully");
+    const key = trimmedLine.substring(0, equalIndex).trim();
+    let value = trimmedLine.substring(equalIndex + 1).trim();
+    value = value.replace(/^["']|["']$/g, '');
+
+    if (allowedKeys.includes(key) && value.length > 0) {
+      secrets[key] = value;
+    }
+  });
+
+  return secrets;
+};
+
+const pushSecretsWithCommand = (targetName: string, command: string, secretKeys: string[]) => {
+  console.log(`🔐 Pushing environment secrets to ${targetName}...`);
+
+  const secretFile = resolve(`.${targetName.replace(/\s+/g, '-').toLowerCase()}.secrets.json`);
+
+  try {
+    const secrets = readEnvSecrets(secretKeys);
+
+    if (Object.keys(secrets).length === 0) {
+      console.log(`⚠️ No secrets found to push to ${targetName}`);
+      return;
+    }
+
+    writeFileSync(secretFile, JSON.stringify(secrets, null, 2));
+    console.log(`📝 Found ${Object.keys(secrets).length} secrets to push to ${targetName}:`, Object.keys(secrets).join(', '));
+    execSync(`${command} ${secretFile}`, { stdio: 'inherit' });
+    console.log(`✅ Secrets pushed to ${targetName} successfully`);
   } catch (error) {
-    console.error("❌ Failed to push secrets:", error);
-    
-    // 确保清理临时文件
-    const runtimeEnvFile = resolve('.env.runtime.json');
-    if (existsSync(runtimeEnvFile)) {
+    console.error(`❌ Failed to push secrets to ${targetName}:`, error);
+    throw error;
+  } finally {
+    if (existsSync(secretFile)) {
       try {
-        execSync(`rm ${runtimeEnvFile}`, { stdio: "inherit" });
+        execSync(`rm ${secretFile}`, { stdio: 'inherit' });
       } catch (cleanupError) {
-        console.error("⚠️ Failed to cleanup temporary file:", cleanupError);
+        console.error(`⚠️ Failed to cleanup ${secretFile}:`, cleanupError);
       }
     }
-    
-    throw error;
   }
+};
+
+const pushPagesSecret = () => {
+  pushSecretsWithCommand(
+    'Pages',
+    'pnpm dlx wrangler pages secret bulk',
+    [
+      'AUTH_GITHUB_ID',
+      'AUTH_GITHUB_SECRET',
+      'AUTH_GOOGLE_ID',
+      'AUTH_GOOGLE_SECRET',
+      'AUTH_SECRET'
+    ]
+  );
+};
+
+const pushEmailWorkerSecret = () => {
+  pushSecretsWithCommand(
+    'Email Worker',
+    'pnpm dlx wrangler secret bulk --config wrangler.email.json',
+    [
+      'ATTACHMENT_STORAGE_ENABLED',
+      'ATTACHMENT_MAX_FILE_SIZE',
+      'ATTACHMENT_MAX_FILES_PER_MESSAGE',
+      'ATTACHMENT_ALLOWED_MIME_PREFIXES'
+    ]
+  );
 };
 
 /**
@@ -556,6 +556,7 @@ const main = async () => {
     await checkAndCreatePages();
     pushPagesSecret();
     deployPages();
+    pushEmailWorkerSecret();
     deployEmailWorker();
     deployCleanupWorker();
 
