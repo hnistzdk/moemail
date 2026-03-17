@@ -425,11 +425,26 @@ const pushPagesSecret = () => {
 const deployPages = () => {
   console.log("🚧 Deploying to Cloudflare Pages...");
   try {
-    execSync("pnpm run deploy:pages", { stdio: "inherit" });
+    execSync("pnpm run build:pages", { stdio: "inherit" });
+    execSync(
+      `pnpm dlx wrangler pages deploy .vercel/output/static --project-name ${PROJECT_NAME} --branch main`,
+      { stdio: "inherit" }
+    );
     console.log("✅ Pages deployment completed successfully");
   } catch (error) {
-    console.error("❌ Pages deployment failed:", error);
-    throw error;
+    console.error("❌ Pages deployment failed on first attempt:", error);
+    console.log("🔁 Retrying Pages deployment once...");
+
+    try {
+      execSync(
+        `pnpm dlx wrangler pages deploy .vercel/output/static --project-name ${PROJECT_NAME} --branch main`,
+        { stdio: "inherit" }
+      );
+      console.log("✅ Pages deployment completed successfully on retry");
+    } catch (retryError) {
+      console.error("❌ Pages deployment failed:", retryError);
+      throw retryError;
+    }
   }
 };
 
