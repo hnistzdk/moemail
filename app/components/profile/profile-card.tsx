@@ -14,6 +14,7 @@ import { useRolePermission } from "@/hooks/use-role-permission"
 import { PERMISSIONS } from "@/lib/permissions"
 import { WebsiteConfigPanel } from "./website-config-panel"
 import { ApiKeyPanel } from "./api-key-panel"
+import { AttachmentConfigPanel } from "./attachment-config-panel"
 
 interface ProfileCardProps {
   user: User
@@ -146,6 +147,7 @@ export function ProfileCard({ user }: ProfileCardProps) {
       )}
 
       {canManageConfig && <WebsiteConfigPanel />}
+      {canManageConfig && <AttachmentConfigPanel />}
       {canManageConfig && <EmailServiceConfig />}
       {canPromote && <PromotePanel />}
       {canManageWebhook && <ApiKeyPanel />}

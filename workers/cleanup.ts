@@ -1,5 +1,6 @@
 interface Env {
   DB: D1Database
+  SITE_CONFIG?: KVNamespace
   ATTACHMENTS?: R2Bucket
 }
 
@@ -19,12 +20,22 @@ const ensureAttachmentsBucket = (env: Env): R2Bucket => {
   return env.ATTACHMENTS
 }
 
+const shouldCleanupAttachmentsWithEmailExpiry = async (env: Env) => {
+  try {
+    const value = await env.SITE_CONFIG?.get('ATTACHMENT_RETENTION_FOLLOW_EMAIL_EXPIRY')
+    return String(value || 'true').toLowerCase() !== 'false'
+  } catch {
+    return true
+  }
+}
+
 const main = {
   async scheduled(_: ScheduledEvent, env: Env) {
     const now = Date.now()
 
     try {
-      const attachmentsBucket = ensureAttachmentsBucket(env)
+      const shouldCleanupAttachments = await shouldCleanupAttachmentsWithEmailExpiry(env)
+      const attachmentsBucket = shouldCleanupAttachments ? ensureAttachmentsBucket(env) : undefined
 
       if (!CLEANUP_CONFIG.DELETE_EXPIRED_EMAILS) {
         console.log('Expired email deletion is disabled')
@@ -50,17 +61,21 @@ const main = {
 
       const placeholders = emailIds.map(() => '?').join(',')
 
-      const attachmentRows = await env.DB
-        .prepare(`
-          SELECT r2_key
-          FROM attachment
-          WHERE email_id IN (${placeholders})
-        `)
-        .bind(...emailIds)
-        .all<{ r2_key: string }>()
+      if (shouldCleanupAttachments && attachmentsBucket) {
+        const attachmentRows = await env.DB
+          .prepare(`
+            SELECT r2_key
+            FROM attachment
+            WHERE email_id IN (${placeholders})
+          `)
+          .bind(...emailIds)
+          .all<{ r2_key: string }>()
 
-      for (const row of attachmentRows.results || []) {
-        await attachmentsBucket.delete(row.r2_key)
+        for (const row of attachmentRows.results || []) {
+          await attachmentsBucket.delete(row.r2_key)
+        }
+      } else {
+        console.log('Attachment cleanup is skipped because retention is not following email expiry')
       }
 
       const result = await env.DB

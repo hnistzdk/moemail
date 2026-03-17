@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm"
 import { createDb } from "@/lib/db"
 import { attachments, emails, messages } from "@/lib/schema"
 import { getUserId } from "@/lib/apiKey"
+import { ATTACHMENT_CONFIG_KEYS } from "@/lib/attachments"
 
 export const runtime = "edge"
 
@@ -12,6 +13,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string; messageId: string; attachmentId: string }> }
 ) {
   try {
+    const downloadEnabled = await getRequestContext().env.SITE_CONFIG.get(ATTACHMENT_CONFIG_KEYS.downloadEnabled)
+    if (String(downloadEnabled || "true").toLowerCase() === "false") {
+      return NextResponse.json(
+        { error: "Attachment download is disabled" },
+        { status: 403 }
+      )
+    }
+
     const userId = await getUserId()
     const { id, messageId, attachmentId } = await params
     const db = createDb()

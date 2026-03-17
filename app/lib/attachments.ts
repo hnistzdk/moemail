@@ -2,11 +2,34 @@ const DEFAULT_MAX_FILE_SIZE = 5 * 1024 * 1024
 const DEFAULT_MAX_FILES_PER_MESSAGE = 3
 const DEFAULT_ALLOWED_PREFIXES = ["image/", "application/pdf"]
 
+export const ATTACHMENT_CONFIG_KEYS = {
+  storageEnabled: "ATTACHMENT_STORAGE_ENABLED",
+  maxFileSize: "ATTACHMENT_MAX_FILE_SIZE",
+  maxFilesPerMessage: "ATTACHMENT_MAX_FILES_PER_MESSAGE",
+  allowedMimePrefixes: "ATTACHMENT_ALLOWED_MIME_PREFIXES",
+  downloadEnabled: "ATTACHMENT_DOWNLOAD_ENABLED",
+  webhookIncludeLink: "ATTACHMENT_WEBHOOK_INCLUDE_LINK",
+  retentionFollowEmailExpiry: "ATTACHMENT_RETENTION_FOLLOW_EMAIL_EXPIRY",
+} as const
+
 export interface AttachmentStorageConfig {
   enabled: boolean
   maxFileSize: number
   maxFilesPerMessage: number
   allowedMimePrefixes: string[]
+  downloadEnabled: boolean
+  webhookIncludeLink: boolean
+  retentionFollowEmailExpiry: boolean
+}
+
+export interface AttachmentConfigPayload {
+  enabled: boolean
+  maxFileSize: number
+  maxFilesPerMessage: number
+  allowedMimePrefixes: string[]
+  downloadEnabled: boolean
+  webhookIncludeLink: boolean
+  retentionFollowEmailExpiry: boolean
 }
 
 export interface StoredAttachment {
@@ -22,18 +45,52 @@ export interface StoredAttachment {
 }
 
 export function resolveAttachmentStorageConfig(env: Record<string, unknown>) {
-  const rawPrefixes = String(env.ATTACHMENT_ALLOWED_MIME_PREFIXES || "")
-  const maxFileSize = Number(env.ATTACHMENT_MAX_FILE_SIZE)
-  const maxFilesPerMessage = Number(env.ATTACHMENT_MAX_FILES_PER_MESSAGE)
+  const rawPrefixes = String(env[ATTACHMENT_CONFIG_KEYS.allowedMimePrefixes] || "")
+  const maxFileSize = Number(env[ATTACHMENT_CONFIG_KEYS.maxFileSize])
+  const maxFilesPerMessage = Number(env[ATTACHMENT_CONFIG_KEYS.maxFilesPerMessage])
 
   return {
-    enabled: String(env.ATTACHMENT_STORAGE_ENABLED || "false").toLowerCase() === "true",
+    enabled: String(env[ATTACHMENT_CONFIG_KEYS.storageEnabled] || "false").toLowerCase() === "true",
     maxFileSize: Number.isFinite(maxFileSize) && maxFileSize > 0 ? maxFileSize : DEFAULT_MAX_FILE_SIZE,
     maxFilesPerMessage: Number.isFinite(maxFilesPerMessage) && maxFilesPerMessage > 0 ? maxFilesPerMessage : DEFAULT_MAX_FILES_PER_MESSAGE,
     allowedMimePrefixes: rawPrefixes.trim()
       ? rawPrefixes.split(",").map(item => item.trim()).filter(Boolean)
       : DEFAULT_ALLOWED_PREFIXES,
+    downloadEnabled: String(env[ATTACHMENT_CONFIG_KEYS.downloadEnabled] || "true").toLowerCase() !== "false",
+    webhookIncludeLink: String(env[ATTACHMENT_CONFIG_KEYS.webhookIncludeLink] || "true").toLowerCase() !== "false",
+    retentionFollowEmailExpiry: String(env[ATTACHMENT_CONFIG_KEYS.retentionFollowEmailExpiry] || "true").toLowerCase() !== "false",
   } satisfies AttachmentStorageConfig
+}
+
+export function normalizeAttachmentConfig(input: Partial<AttachmentConfigPayload> | null | undefined): AttachmentConfigPayload {
+  const rawPrefixes = Array.isArray(input?.allowedMimePrefixes)
+    ? input?.allowedMimePrefixes
+    : String(input?.allowedMimePrefixes || "").split(",")
+
+  const maxFileSize = Number(input?.maxFileSize)
+  const maxFilesPerMessage = Number(input?.maxFilesPerMessage)
+
+  return {
+    enabled: Boolean(input?.enabled),
+    maxFileSize: Number.isFinite(maxFileSize) && maxFileSize > 0 ? maxFileSize : DEFAULT_MAX_FILE_SIZE,
+    maxFilesPerMessage: Number.isFinite(maxFilesPerMessage) && maxFilesPerMessage > 0 ? maxFilesPerMessage : DEFAULT_MAX_FILES_PER_MESSAGE,
+    allowedMimePrefixes: rawPrefixes.map(item => String(item).trim()).filter(Boolean),
+    downloadEnabled: input?.downloadEnabled ?? true,
+    webhookIncludeLink: input?.webhookIncludeLink ?? true,
+    retentionFollowEmailExpiry: input?.retentionFollowEmailExpiry ?? true,
+  }
+}
+
+export function serializeAttachmentConfig(config: AttachmentConfigPayload) {
+  return {
+    [ATTACHMENT_CONFIG_KEYS.storageEnabled]: config.enabled.toString(),
+    [ATTACHMENT_CONFIG_KEYS.maxFileSize]: config.maxFileSize.toString(),
+    [ATTACHMENT_CONFIG_KEYS.maxFilesPerMessage]: config.maxFilesPerMessage.toString(),
+    [ATTACHMENT_CONFIG_KEYS.allowedMimePrefixes]: config.allowedMimePrefixes.join(","),
+    [ATTACHMENT_CONFIG_KEYS.downloadEnabled]: config.downloadEnabled.toString(),
+    [ATTACHMENT_CONFIG_KEYS.webhookIncludeLink]: config.webhookIncludeLink.toString(),
+    [ATTACHMENT_CONFIG_KEYS.retentionFollowEmailExpiry]: config.retentionFollowEmailExpiry.toString(),
+  }
 }
 
 export function getAllowedAttachmentPrefixes(config: AttachmentStorageConfig) {

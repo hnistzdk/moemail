@@ -13,11 +13,45 @@ import {
   shouldStoreAttachment,
 } from '../app/lib/attachments'
 
+const getSiteConfigValue = async (env: Env, key: string) => {
+  try {
+    return await env.SITE_CONFIG.get(key)
+  } catch {
+    return undefined
+  }
+}
+
+const getEnvValue = (env: Env, key: string) => {
+  return (env as unknown as Record<string, unknown>)[key]
+}
+
+const getAttachmentRuntimeConfig = async (env: Env) => {
+  const [storageEnabled, maxFileSize, maxFilesPerMessage, allowedMimePrefixes, downloadEnabled, webhookIncludeLink, retentionFollowEmailExpiry] = await Promise.all([
+    getSiteConfigValue(env, 'ATTACHMENT_STORAGE_ENABLED'),
+    getSiteConfigValue(env, 'ATTACHMENT_MAX_FILE_SIZE'),
+    getSiteConfigValue(env, 'ATTACHMENT_MAX_FILES_PER_MESSAGE'),
+    getSiteConfigValue(env, 'ATTACHMENT_ALLOWED_MIME_PREFIXES'),
+    getSiteConfigValue(env, 'ATTACHMENT_DOWNLOAD_ENABLED'),
+    getSiteConfigValue(env, 'ATTACHMENT_WEBHOOK_INCLUDE_LINK'),
+    getSiteConfigValue(env, 'ATTACHMENT_RETENTION_FOLLOW_EMAIL_EXPIRY'),
+  ])
+
+  return resolveAttachmentStorageConfig({
+    ATTACHMENT_STORAGE_ENABLED: storageEnabled ?? getEnvValue(env, 'ATTACHMENT_STORAGE_ENABLED'),
+    ATTACHMENT_MAX_FILE_SIZE: maxFileSize ?? getEnvValue(env, 'ATTACHMENT_MAX_FILE_SIZE'),
+    ATTACHMENT_MAX_FILES_PER_MESSAGE: maxFilesPerMessage ?? getEnvValue(env, 'ATTACHMENT_MAX_FILES_PER_MESSAGE'),
+    ATTACHMENT_ALLOWED_MIME_PREFIXES: allowedMimePrefixes ?? getEnvValue(env, 'ATTACHMENT_ALLOWED_MIME_PREFIXES'),
+    ATTACHMENT_DOWNLOAD_ENABLED: downloadEnabled ?? getEnvValue(env, 'ATTACHMENT_DOWNLOAD_ENABLED'),
+    ATTACHMENT_WEBHOOK_INCLUDE_LINK: webhookIncludeLink ?? getEnvValue(env, 'ATTACHMENT_WEBHOOK_INCLUDE_LINK'),
+    ATTACHMENT_RETENTION_FOLLOW_EMAIL_EXPIRY: retentionFollowEmailExpiry ?? getEnvValue(env, 'ATTACHMENT_RETENTION_FOLLOW_EMAIL_EXPIRY'),
+  })
+}
+
 const getAttachmentByteSize = (content: ArrayBuffer) => content.byteLength
 
 const handleEmail = async (message: ForwardableEmailMessage, env: Env) => {
   const db = drizzle(env.DB, { schema: { attachments, emails, messages, webhooks } })
-  const attachmentConfig = resolveAttachmentStorageConfig(env as unknown as Record<string, unknown>)
+  const attachmentConfig = await getAttachmentRuntimeConfig(env)
 
   const parsedMessage = await PostalMime.parse(message.raw)
 
@@ -88,7 +122,9 @@ const handleEmail = async (message: ForwardableEmailMessage, env: Env) => {
             size,
             inline: attachment.disposition === 'inline',
             contentId: attachment.contentId || null,
-            downloadUrl: buildAttachmentDownloadUrl(targetEmail.id, savedMessage.id, attachmentId),
+            downloadUrl: attachmentConfig.downloadEnabled
+              ? buildAttachmentDownloadUrl(targetEmail.id, savedMessage.id, attachmentId)
+              : '',
           })
         } catch (attachmentError) {
           console.error('Failed to persist attachment:', attachmentError)
@@ -117,7 +153,12 @@ const handleEmail = async (message: ForwardableEmailMessage, env: Env) => {
             html: savedMessage.html,
             receivedAt: savedMessage.receivedAt.toISOString(),
             toAddress: targetEmail.address,
-            attachments: savedAttachments,
+            attachments: attachmentConfig.webhookIncludeLink
+              ? savedAttachments
+              : savedAttachments.map(attachment => ({
+                  ...attachment,
+                  downloadUrl: '',
+                })),
           } as EmailMessage)
         })
       } catch (error) {

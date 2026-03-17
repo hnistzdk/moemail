@@ -4,7 +4,7 @@ import { createDb } from "@/lib/db"
 import { attachments, messages, emails } from "@/lib/schema"
 import { and, eq } from "drizzle-orm"
 import { getUserId } from "@/lib/apiKey"
-import { buildAttachmentDownloadUrl } from "@/lib/attachments"
+import { ATTACHMENT_CONFIG_KEYS, buildAttachmentDownloadUrl } from "@/lib/attachments"
 export const runtime = "edge"
 
 export async function DELETE(
@@ -77,6 +77,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const { id, messageId } = await params
     const db = createDb()
     const userId = await getUserId()
+    const downloadEnabledValue = await getRequestContext().env.SITE_CONFIG.get(ATTACHMENT_CONFIG_KEYS.downloadEnabled)
+    const downloadEnabled = String(downloadEnabledValue || "true").toLowerCase() !== "false"
 
     const email = await db.query.emails.findFirst({
       where: and(
@@ -130,7 +132,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
           content_type: attachment.contentType,
           size: attachment.size,
           inline: attachment.disposition === 'inline',
-          download_url: buildAttachmentDownloadUrl(id, messageId, attachment.id),
+          download_url: downloadEnabled ? buildAttachmentDownloadUrl(id, messageId, attachment.id) : "",
         }))
       }
     })

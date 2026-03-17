@@ -15,6 +15,12 @@
       "database_id": "${DATABASE_ID}"
     }
   ],
+  "kv_namespaces": [
+    {
+      "binding": "SITE_CONFIG",
+      "id": "${KV_NAMESPACE_ID}"
+    }
+  ],
   "r2_buckets": [
     {
       "binding": "ATTACHMENTS",

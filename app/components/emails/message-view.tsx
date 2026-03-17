@@ -254,23 +254,40 @@ export function MessageView({ emailId, messageId, messageType = 'received' }: Me
             </div>
             <div className="space-y-1">
               {message.attachments.map(attachment => (
-                <a
-                  key={attachment.id}
-                  href={attachment.download_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center justify-between rounded-md border border-primary/10 px-2 py-2 text-xs hover:bg-primary/5"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate font-medium">
-                      {attachment.filename || t("unnamedAttachment")}
+                attachment.download_url ? (
+                  <a
+                    key={attachment.id}
+                    href={attachment.download_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between rounded-md border border-primary/10 px-2 py-2 text-xs hover:bg-primary/5"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">
+                        {attachment.filename || t("unnamedAttachment")}
+                      </div>
+                      <div className="text-gray-500 truncate">
+                        {attachment.content_type} · {formatFileSize(attachment.size)}
+                      </div>
                     </div>
-                    <div className="text-gray-500 truncate">
-                      {attachment.content_type} · {formatFileSize(attachment.size)}
+                    <Download className="h-3.5 w-3.5 shrink-0" />
+                  </a>
+                ) : (
+                  <div
+                    key={attachment.id}
+                    className="flex items-center justify-between rounded-md border border-primary/10 px-2 py-2 text-xs opacity-70"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">
+                        {attachment.filename || t("unnamedAttachment")}
+                      </div>
+                      <div className="text-gray-500 truncate">
+                        {attachment.content_type} · {formatFileSize(attachment.size)}
+                      </div>
                     </div>
+                    <span className="text-[11px] text-gray-500">{t("downloadDisabled")}</span>
                   </div>
-                  <Download className="h-3.5 w-3.5 shrink-0" />
-                </a>
+                )
               ))}
             </div>
           </div>

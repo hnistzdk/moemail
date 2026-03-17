@@ -86,6 +86,7 @@
     "time": "Time",
     "attachments": "Attachments ({count})",
     "unnamedAttachment": "Unnamed attachment",
+    "downloadDisabled": "Download disabled",
     "htmlFormat": "HTML Format",
     "textFormat": "Plain Text Format"
   },
