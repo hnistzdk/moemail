@@ -62,6 +62,11 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const debounceTimer = useRef<ReturnType<typeof setTimeout>>(null)
+  const debouncedSearchRef = useRef(debouncedSearch)
+
+  useEffect(() => {
+    debouncedSearchRef.current = debouncedSearch
+  }, [debouncedSearch])
 
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value)
@@ -71,24 +76,13 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
     }, 300)
   }, [])
 
-  const clearSearch = useCallback(() => {
-    setSearch('')
-    setDebouncedSearch('')
-    if (debounceTimer.current) clearTimeout(debounceTimer.current)
-    // Reset list to show all emails
-    setEmails([])
-    setNextCursor(null)
-    setLoading(true)
-    fetchEmails(undefined, '')
-  }, [])
-
-  const fetchEmails = async (cursor?: string, searchQuery?: string) => {
+  const fetchEmails = useCallback(async (cursor?: string, searchQuery?: string) => {
     try {
       const url = new URL("/api/emails", window.location.origin)
       if (cursor) {
         url.searchParams.set('cursor', cursor)
       }
-      const currentSearch = searchQuery ?? debouncedSearch
+      const currentSearch = searchQuery ?? debouncedSearchRef.current
       if (currentSearch) {
         url.searchParams.set('search', currentSearch)
       }
@@ -118,7 +112,17 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
       setRefreshing(false)
       setLoadingMore(false)
     }
-  }
+  }, [])
+
+  const clearSearch = useCallback(() => {
+    setSearch('')
+    setDebouncedSearch('')
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    setEmails([])
+    setNextCursor(null)
+    setLoading(true)
+    void fetchEmails(undefined, '')
+  }, [fetchEmails])
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -139,8 +143,8 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
   }, 200)
 
   useEffect(() => {
-    if (session) fetchEmails()
-  }, [session])
+    if (session) void fetchEmails()
+  }, [session, fetchEmails])
 
 
   useEffect(() => {
@@ -149,8 +153,8 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
     setEmails([])
     setNextCursor(null)
     setLoading(true)
-    fetchEmails(undefined, debouncedSearch)
-  }, [debouncedSearch])
+    void fetchEmails(undefined, debouncedSearch)
+  }, [debouncedSearch, fetchEmails, session])
 
   const handleDelete = async (email: Email) => {
     try {
