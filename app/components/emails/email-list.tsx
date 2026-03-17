@@ -83,6 +83,7 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
         url.searchParams.set('cursor', cursor)
       }
       const currentSearch = searchQuery ?? debouncedSearchRef.current
+      const isExplicitSearchRequest = searchQuery !== undefined
       if (currentSearch) {
         url.searchParams.set('search', currentSearch)
       }
@@ -92,8 +93,8 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
       if (cursor) {
         // Pagination: append
         setEmails(prev => [...prev, ...data.emails])
-      } else if (currentSearch) {
-        // Search: replace entirely
+      } else if (isExplicitSearchRequest) {
+        // Search mode changes should replace entirely, including clearing search
         setEmails(data.emails)
       } else {
         // Non-search refresh: merge new emails into existing list
@@ -143,13 +144,7 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
   }, 200)
 
   useEffect(() => {
-    if (session) void fetchEmails()
-  }, [session, fetchEmails])
-
-
-  useEffect(() => {
     if (!session) return
-    if (!debouncedSearch) return
     setEmails([])
     setNextCursor(null)
     setLoading(true)
